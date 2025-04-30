@@ -4,33 +4,44 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="refresh" content="10"> <!-- Auto-refresh page every 10 seconds -->
     <title>Telegram Bot Stats</title>
     <style>
         body {
-            font-family: sans-serif;
-            padding: 20px;
-            line-height: 1.6;
-            background-color: #f4f4f4;
-            color: #333;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            padding: 25px;
+            line-height: 1.7;
+            background-color: #f8f9fa;
+            color: #212529;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
         }
         .container {
-            background-color: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            max-width: 500px;
-            margin: auto;
-        }
-        h1 {
-            color: #0088cc;
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            max-width: 600px;
+            width: 90%;
             text-align: center;
         }
+        h1 {
+            color: #007bff;
+            margin-bottom: 25px;
+        }
         .stats p {
-            font-size: 1.1em;
-            margin: 10px 0;
+            font-size: 1.2em;
+            margin: 12px 0;
+            color: #495057;
         }
         .stats span {
-            font-weight: bold;
+            font-weight: 600;
+            font-size: 1.4em; /* Make numbers bigger */
+            display: block; /* Put number on its own line */
+            margin-top: 5px; /* Space between label and number */
         }
         #success-count {
             color: #28a745;
@@ -38,69 +49,34 @@
         #failure-count {
             color: #dc3545;
         }
-        button {
-            display: block;
-            width: 100%;
-            padding: 10px 15px;
-            font-size: 1em;
-            color: #fff;
-            background-color: #007bff;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            margin-top: 20px;
-            transition: background-color 0.3s ease;
+         .info {
+            font-size: 0.9em;
+            color: #6c757d;
+            margin-top: 30px;
+            border-top: 1px solid #dee2e6;
+            padding-top: 20px;
         }
-        button:hover {
-            background-color: #0056b3;
-        }
-        button:disabled {
-            background-color: #cccccc;
-            cursor: not-allowed;
-        }
-        #status {
-            margin-top: 15px;
-            padding: 10px;
-            border-radius: 5px;
-            min-height: 40px; /* Ensure space is reserved */
-            text-align: center;
+        .loader {
             font-style: italic;
+            color: #6c757d;
         }
-        .status-success {
-             background-color: #e9f7ef;
-             color: #28a745;
-             border: 1px solid #a6d9b3;
-        }
-         .status-error {
-             background-color: #f8d7da;
-             color: #721c24;
-             border: 1px solid #f5c6cb;
-         }
-          .status-info {
-             background-color: #e2e3e5;
-             color: #383d41;
-             border: 1px solid #d6d8db;
-         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Telegram Random Sender Stats</h1>
+        <h1>Telegram Auto-Sender Stats</h1>
         <div class="stats">
-            <p>✅ Messages Sent Successfully: <span id="success-count">Loading...</span></p>
-            <p>❌ Send Attempts Failed: <span id="failure-count">Loading...</span></p>
+            <p>✅ Messages Sent Successfully: <span id="success-count" class="loader">Loading...</span></p>
+            <p>❌ Send Attempts Failed: <span id="failure-count" class="loader">Loading...</span></p>
         </div>
-
-        <button id="send-button">Attempt to Send Random Message</button>
-
-        <div id="status" class="status-info">Click the button to send a message to a random ID.</div>
+         <div class="info">
+            Stats reflect attempts since the last server instance start. This page auto-refreshes every 10 seconds. Send attempts happen when the `/send` endpoint is triggered (e.g., via Vercel Cron Jobs or manual visit).
+        </div>
     </div>
 
     <script>
         const successCountEl = document.getElementById('success-count');
         const failureCountEl = document.getElementById('failure-count');
-        const sendButton = document.getElementById('send-button');
-        const statusEl = document.getElementById('status');
 
         async function fetchStats() {
             try {
@@ -111,54 +87,22 @@
                 const data = await response.json();
                 successCountEl.textContent = data.success;
                 failureCountEl.textContent = data.failed;
+                successCountEl.classList.remove('loader');
+                failureCountEl.classList.remove('loader');
             } catch (error) {
                 console.error('Error fetching stats:', error);
                 successCountEl.textContent = 'Error';
                 failureCountEl.textContent = 'Error';
-                statusEl.textContent = 'Could not load stats.';
-                statusEl.className = 'status-error';
+                successCountEl.classList.remove('loader');
+                failureCountEl.classList.remove('loader');
             }
         }
-
-        async function triggerSend() {
-            sendButton.disabled = true;
-            statusEl.textContent = 'Attempting to send...';
-            statusEl.className = 'status-info';
-
-            try {
-                const response = await fetch('/send', { method: 'POST' });
-                const result = await response.json();
-
-                if (!response.ok) {
-                     throw new Error(result.reason || `Server error: ${response.status}`);
-                }
-
-                if (result.status === 'attempted') {
-                    if (result.result.success) {
-                        statusEl.textContent = `✅ Message sent attempt to ID ${result.result.chatId} recorded as success.`;
-                         statusEl.className = 'status-success';
-                    } else {
-                        statusEl.textContent = `❌ Message sent attempt to ID ${result.result.chatId} failed: ${result.result.error || 'Unknown error'}`;
-                         statusEl.className = 'status-error';
-                    }
-                } else {
-                     statusEl.textContent = `Unexpected status: ${result.status}`;
-                     statusEl.className = 'status-error';
-                }
-            } catch (error) {
-                console.error('Error triggering send:', error);
-                statusEl.textContent = `Error: ${error.message}`;
-                statusEl.className = 'status-error';
-            } finally {
-                sendButton.disabled = false;
-                await fetchStats(); // Refresh counts after attempt
-            }
-        }
-
-        sendButton.addEventListener('click', triggerSend);
 
         // Initial load
         fetchStats();
+
+        // Set interval to fetch stats periodically (optional, as page auto-refreshes)
+        // setInterval(fetchStats, 5000); // Fetch every 5 seconds
     </script>
 </body>
 </html>
