@@ -4,8 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="refresh" content="10"> <!-- Auto-refresh page every 10 seconds -->
-    <title>Telegram Bot Stats</title>
+    <title>Telegram Auto Sender Control</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -32,6 +31,38 @@
             color: #007bff;
             margin-bottom: 25px;
         }
+        .controls button {
+            padding: 12px 25px;
+            font-size: 1.1em;
+            margin: 10px;
+            border-radius: 5px;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s ease, opacity 0.3s ease;
+        }
+        #start-button {
+            background-color: #28a745;
+            color: white;
+        }
+        #start-button:disabled {
+            background-color: #cccccc;
+             opacity: 0.7;
+             cursor: not-allowed;
+        }
+        #stop-button {
+            background-color: #dc3545;
+            color: white;
+        }
+         #stop-button:disabled {
+            background-color: #cccccc;
+             opacity: 0.7;
+            cursor: not-allowed;
+         }
+        .stats {
+            margin-top: 25px;
+            padding-top: 20px;
+            border-top: 1px solid #dee2e6;
+        }
         .stats p {
             font-size: 1.2em;
             margin: 12px 0;
@@ -39,50 +70,63 @@
         }
         .stats span {
             font-weight: 600;
-            font-size: 1.4em; /* Make numbers bigger */
-            display: block; /* Put number on its own line */
-            margin-top: 5px; /* Space between label and number */
+            font-size: 1.4em;
+            display: block;
+            margin-top: 5px;
         }
-        #success-count {
-            color: #28a745;
-        }
-        #failure-count {
-            color: #dc3545;
-        }
-         .info {
-            font-size: 0.9em;
-            color: #6c757d;
-            margin-top: 30px;
-            border-top: 1px solid #dee2e6;
-            padding-top: 20px;
-        }
-        .loader {
+        #success-count { color: #28a745; }
+        #failure-count { color: #dc3545; }
+        #status {
+            margin-top: 20px;
+            font-size: 1em;
             font-style: italic;
             color: #6c757d;
+            min-height: 1.5em; /* Reserve space */
         }
+        .loader { font-style: italic; color: #6c757d; }
+         .warning { font-weight: bold; color: #ffc107; margin-top: 15px; }
+         .error { font-weight: bold; color: #dc3545; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Telegram Auto-Sender Stats</h1>
+        <h1>Telegram Auto Sender</h1>
+
+        <div class="controls">
+            <button id="start-button">Start Sending</button>
+            <button id="stop-button" disabled>Stop Sending</button>
+        </div>
+
+        <div id="status">Status: Idle</div>
+
         <div class="stats">
-            <p>✅ Messages Sent Successfully: <span id="success-count" class="loader">Loading...</span></p>
-            <p>❌ Send Attempts Failed: <span id="failure-count" class="loader">Loading...</span></p>
+             <h2>Live Stats</h2>
+            <p>✅ Total Messages Sent Successfully: <span id="success-count" class="loader">Loading...</span></p>
+            <p>❌ Total Send Attempts Failed: <span id="failure-count" class="loader">Loading...</span></p>
         </div>
-         <div class="info">
-            Stats reflect attempts since the last server instance start. This page auto-refreshes every 10 seconds. Send attempts happen when the `/send` endpoint is triggered (e.g., via Vercel Cron Jobs or manual visit).
-        </div>
+         <div class="warning">
+             ⚠️ WARNING: Running this for extended periods or at high frequency WILL likely get your bot rate-limited or banned by Telegram. Use with extreme caution.
+         </div>
     </div>
 
     <script>
+        const startButton = document.getElementById('start-button');
+        const stopButton = document.getElementById('stop-button');
         const successCountEl = document.getElementById('success-count');
         const failureCountEl = document.getElementById('failure-count');
+        const statusEl = document.getElementById('status');
 
+        let sendIntervalId = null; // To store the interval ID for stopping
+        let statsIntervalId = null; // To store the interval ID for fetching stats
+        const SEND_INTERVAL_MS = 1000; // Send attempt every 1 second - VERY RISKY
+        const STATS_INTERVAL_MS = 2000; // Update stats display every 2 seconds
+
+        // Function to fetch latest stats from backend
         async function fetchStats() {
             try {
                 const response = await fetch('/stats');
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    throw new Error(`Stats fetch failed: ${response.status}`);
                 }
                 const data = await response.json();
                 successCountEl.textContent = data.success;
@@ -93,16 +137,91 @@
                 console.error('Error fetching stats:', error);
                 successCountEl.textContent = 'Error';
                 failureCountEl.textContent = 'Error';
-                successCountEl.classList.remove('loader');
-                failureCountEl.classList.remove('loader');
+                statusEl.textContent = 'Error fetching stats.';
+                statusEl.classList.add('error');
             }
         }
 
-        // Initial load
+        // Function to trigger ONE send attempt via backend
+        async function attemptSend() {
+             if (!navigator.onLine) {
+                statusEl.textContent = 'Status: Offline. Paused sending.';
+                statusEl.classList.add('error');
+                // Optionally stop sending automatically when offline
+                // stopSending();
+                return; // Don't attempt send if offline
+             }
+             statusEl.classList.remove('error'); // Clear previous error state
+            try {
+                 // No need to update status here immediately, let fetchStats handle totals
+                 // Optional: Show "Sending..." briefly
+                 // statusEl.textContent = 'Status: Sending request...';
+                const response = await fetch('/send', { method: 'POST' });
+                 if (!response.ok) {
+                     // Handle specific backend errors if needed from response body
+                      statusEl.textContent = `Status: Send request failed (${response.status}).`;
+                      statusEl.classList.add('error');
+                      throw new Error(`Send request failed: ${response.status}`);
+                 }
+                 const resultData = await response.json();
+                 // Optional: Log result of specific attempt
+                 console.log('Send attempt result:', resultData.result);
+                 // The global count is updated on the backend, fetchStats will get it
+                 // statusEl.textContent = `Status: Last attempt to ${resultData.result.chatId} ${resultData.result.success ? 'OK' : 'Failed'}. Running...`;
+
+            } catch (error) {
+                console.error('Error triggering send:', error);
+                // Error is logged, fetchStats will show updated failure count eventually
+                 statusEl.textContent = 'Status: Error during send attempt. Check console.';
+                 statusEl.classList.add('error');
+            }
+        }
+
+        function startSending() {
+            if (sendIntervalId !== null) return; // Already running
+
+            console.log('Starting send loop...');
+            startButton.disabled = true;
+            stopButton.disabled = false;
+            statusEl.textContent = 'Status: Running...';
+             statusEl.classList.remove('error');
+
+            // Immediately attempt one send and fetch stats
+             attemptSend();
+             fetchStats();
+
+
+            // Start the interval for sending
+            sendIntervalId = setInterval(attemptSend, SEND_INTERVAL_MS);
+            // Start the interval for fetching stats
+            statsIntervalId = setInterval(fetchStats, STATS_INTERVAL_MS);
+        }
+
+        function stopSending() {
+            if (sendIntervalId === null) return; // Already stopped
+
+            console.log('Stopping send loop...');
+            clearInterval(sendIntervalId);
+            clearInterval(statsIntervalId);
+            sendIntervalId = null;
+            statsIntervalId = null;
+
+            startButton.disabled = false;
+            stopButton.disabled = true;
+            statusEl.textContent = 'Status: Stopped.';
+            statusEl.classList.remove('error');
+
+            // Fetch final stats
+            fetchStats();
+        }
+
+        // Event Listeners
+        startButton.addEventListener('click', startSending);
+        stopButton.addEventListener('click', stopSending);
+
+        // Initial load: fetch stats once
         fetchStats();
 
-        // Set interval to fetch stats periodically (optional, as page auto-refreshes)
-        // setInterval(fetchStats, 5000); // Fetch every 5 seconds
     </script>
 </body>
 </html>

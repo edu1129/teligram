@@ -15,21 +15,21 @@ if (BOT_TOKEN) {
 }
 
 // In-memory counters (will reset on cold starts)
-let successCount = 0;
-let failureCount = 0;
+let globalSuccessCount = 0;
+let globalFailureCount = 0;
 
-const gandhijiInfo = `Mohandas Karamchand Gandhi, commonly known as Mahatma Gandhi, was an Indian lawyer, anti-colonial nationalist, and political ethicist, who employed nonviolent resistance to lead the successful campaign for India's independence from British rule, and in turn, inspired movements for civil rights and freedom across the world.`;
+const gandhijiInfo = `Mahatma Gandhi, born Mohandas Karamchand Gandhi, was a leader of India's independence movement against British rule. He employed nonviolent civil disobedience and inspired movements for civil rights and freedom across the world.`;
 
 function generateRandomChatId() {
-    const min = -1001999999999;
-    const max = 6999999999;
+    const min = -1001999999999; // Approx lower bound for channel IDs
+    const max = 6999999999; // Approx upper bound for user IDs
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-async function attemptGandhijiMessageSend() {
+async function attemptSingleSend() {
     if (!bot) {
-        console.log("Bot is not initialized due to missing token.");
-        failureCount++; // Count as failure if bot cannot operate
+        console.log("Bot not initialized.");
+        globalFailureCount++; // Count as failure if bot cannot operate
         return { success: false, chatId: 'N/A', error: 'Bot not initialized (Missing Token)' };
     }
     
@@ -38,27 +38,16 @@ async function attemptGandhijiMessageSend() {
     let result = { success: false, chatId: chatId, error: null };
     
     try {
-        // Attempt to send the message
         await bot.telegram.sendMessage(chatId, text);
-        successCount++;
         result.success = true;
-        console.log(`Successfully sent Gandhiji info to ${chatId}`);
+        globalSuccessCount++; // Increment global counter on success
+        console.log(`Success: Sent to ${chatId}`);
     } catch (error) {
-        failureCount++;
-        // Simplify error logging for potentially very common errors
-        if (error.response && error.response.error_code === 400 && error.response.description.includes('chat not found')) {
-            result.error = 'Chat not found';
-            console.error(`Failed to send to ${chatId}: Chat not found`);
-        } else if (error.response && error.response.error_code === 403 && error.response.description.includes('bot was blocked by the user')) {
-            result.error = 'Bot blocked by user';
-            console.error(`Failed to send to ${chatId}: Bot blocked`);
-        }
-        else {
-            result.error = error.message || 'Unknown send error';
-            console.error(`Failed to send to ${chatId}: ${result.error}`);
-        }
+        result.error = error.description || error.message || 'Unknown send error';
+        globalFailureCount++; // Increment global counter on failure
+        console.error(`Failed: Send to ${chatId} (${result.error})`);
     }
-    return result;
+    return result; // Return result of this specific attempt
 }
 
 const htmlFilePath = path.join(__dirname, 'index.html');
@@ -66,7 +55,7 @@ const htmlFilePath = path.join(__dirname, 'index.html');
 module.exports = async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host}`);
     
-    // Route to serve the HTML stats page
+    // Route to serve the HTML page
     if (url.pathname === '/' && req.method === 'GET') {
         try {
             const htmlContent = fs.readFileSync(htmlFilePath, 'utf8');
@@ -78,16 +67,17 @@ module.exports = async (req, res) => {
             console.error('Error reading index.html:', error);
         }
     }
-    // Route to provide stats data
+    // Route to provide current stats data
     else if (url.pathname === '/stats' && req.method === 'GET') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: successCount, failed: failureCount }));
+        res.end(JSON.stringify({ success: globalSuccessCount, failed: globalFailureCount }));
     }
-    // Route to trigger a send attempt (could be called by a cron job)
-    else if (url.pathname === '/send' && req.method === 'GET') { // Changed to GET for easier browser testing/cron
-        const result = await attemptGandhijiMessageSend();
+    // Route called by frontend to trigger ONE send attempt
+    else if (url.pathname === '/send' && req.method === 'POST') { // Use POST for action
+        const result = await attemptSingleSend(); // Attempt one send and update global counts
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ status: 'Send Attempted', result: result }));
+        // Send back the result of *this* specific attempt
+        res.end(JSON.stringify({ status: 'attempted', result: result }));
     }
     // Catch-all for other paths
     else {
