@@ -1,0 +1,16 @@
+
+{
+  "name": "vercel-telegram-bot",
+  "version": "1.0.0",
+  "description": "Simple Telegram bot for Vercel",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "telegraf": "^4.16.3"
+  },
+  "engines": {
+     "node": "18.x"
+  }
+}
