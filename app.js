@@ -13,10 +13,12 @@ app.post('/message', (req, res) => {
     // Extract data from the request body
     const { app, sender, message, group_name, phone } = req.body;
 
-    // Process the message and create a reply
-    let replyMessage = `Received message from ${sender} on ${app}: ${message}`;
-    if (group_name) {
-        replyMessage += ` in group ${group_name}`;
+    // Determine the reply based on the message
+    let replyMessage;
+    if (message && message.toLowerCase() === 'hello') {
+        replyMessage = "Hello, how can I help you?";
+    } else {
+        replyMessage = "I don't understand.";
     }
 
     // Send the reply back as JSON
