@@ -1,16 +1,15 @@
-
 {
-  "name": "vercel-telegram-bot",
+  "name": "telegram-photo-bot",
   "version": "1.0.0",
-  "description": "Simple Telegram bot for Vercel",
+  "description": "Captures user photo and sends to Telegram bot.",
   "main": "app.js",
   "scripts": {
     "start": "node app.js"
   },
   "dependencies": {
-    "telegraf": "^4.16.3"
-  },
-  "engines": {
-     "node": "18.x"
+    "express": "^4.18.2",
+    "node-telegram-bot-api": "^0.61.0",
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5"
   }
 }
